@@ -2,6 +2,8 @@ import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
 from models.models import load_model
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Only log errors
 
 app = FastAPI()
 class StressPredictionInput(BaseModel):
