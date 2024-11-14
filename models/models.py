@@ -46,7 +46,7 @@ def lstm_model(X_train, Y_train):
 def load_model(model_name):
     current_dir = os.path.dirname(__file__)
     if model_name == 'svm':
-        model_path = os.path.join(current_dir, 'svm_model.joblib')
+        model_path = os.path.join(current_dir, 'svm_model_new.joblib')
         model = joblib.load(model_path)
         return model
     elif model_name == 'logistic_regression':

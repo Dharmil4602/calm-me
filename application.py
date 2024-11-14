@@ -1,114 +1,78 @@
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI
-from pydantic import BaseModel
 from models.models import load_model
 from flask import Flask, request, jsonify
-import joblib
 from sklearn.preprocessing import StandardScaler
 from database.db import Connection
 from uuid import uuid1
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# app = FastAPI()
 app = Flask(__name__)
-db = Connection(os.getenv("MONGODB_DB")) # Database Connection
+if __name__ == "__main__":
+    app.run(debug=True)
+    
+db = Connection(os.getenv("MONGODB_DB"))
 scaler = StandardScaler()
-# scaler = joblib.load('standard_scaler.save')
-class StressPredictionInput(BaseModel):
-    age: int
-    gender: int
-    hrv: float
-    bmi: float
-    hrmax: int
-
-@app.route('/', methods=['GET'])
-def hello():
-    return "Hello World!"
-
-# # Fast API
-# @app.post("/predict/")
-# def predict(data: StressPredictionInput, model_name = 'logistic_regression'):
-#     input_data = np.asarray([[data.age, data.gender, data.hrv, data.hrmax, data.bmi]])
-#     print("..................", input_data)
-    
-#     dataset = pd.read_csv('./data/hrv_dataset.csv')
-#     hrv_dataframe = pd.DataFrame(dataset, columns=['Age', 'Gender', 'BMI', 'SDNN_P', 'Hrmax'])    
-    
-#     scaler.fit(hrv_dataframe)
-    
-#     input_data1 = scaler.transform(input_data)
-#     print('21111111111111', input_data1)
-    
-#     model = load_model(model_name)
-#     prediction = model.predict(input_data1)
-#     print("ppppppppppp", prediction)
-    
-#     print(data.hrv)
-
-#     stress_mapping = {0: "Mild Stress", 1: "No Stress", 2: "Stress"}
-#     return {"model": model_name, "prediction": stress_mapping.get(int(prediction), "Unknown")}
-
 
 # Flask API
-@app.route("/predict/", methods=['POST'])
+@app.route("/predict", methods=['POST'])
 def predict():
     data = request.get_json()
+    # Checking if the data is a list or a single object
+    if not isinstance(data, list):
+        data = [data]        
+    dataFromFunction = loadHrvInModel(data)
     
-    print("Data: ", data)
-    
-    age = data['age']
-    gender = data['gender']
-    hrv = data['hrv']
-    hrmax = data['hrmax']
-    bmi = data['bmi']
-    
-    input_data = np.asarray([[age, gender, hrv, hrmax, bmi]])
-    
-    print("Input Data:", input_data)
-    
-    dataset = pd.read_csv('./data/hrv_dataset.csv')
-    hrv_dataframe = pd.DataFrame(dataset, columns=['Age', 'Gender', 'BMI', 'SDNN_P', 'Hrmax'])
-    
-    scaler.fit(hrv_dataframe)
-    input_data_scaled = scaler.transform(input_data)
-    
-    model_name = 'svm'
-    
-    model = load_model(model_name)
-    prediction = model.predict(input_data_scaled)
-    
-    stress_mapping = {0: "Mild Stress", 1: "No Stress", 2: "Stress"}
-    prediction_result = stress_mapping.get(int(prediction[0]), "Unknown")
-    register_user({
-        "age": age,
-        "gender": gender,
-        "hrv": hrv,
-        "hrmax": hrmax,
-        "bmi": bmi,
-        "model": model_name,
-        "prediction": prediction_result
-    })
-    return {"model": model_name, "prediction": prediction_result}
+    register_user(dataFromFunction)
+    return {"message": dataFromFunction}
 
+def loadHrvInModel(data):
+    results = []
+    hrvData_array = []
+    for i in data:
+        for hrvData in i['healthData']:
+            hrv = hrvData['value']
+            email = i['email']
+            dateFrom = hrvData['dateFrom']
+            dateTo = hrvData['dateTo']
+            
+            input_data = np.asarray([[hrv]])
+            dataset = pd.read_csv('./data/sdnn_labeled_dataset.csv')
+            hrv_dataframe = pd.DataFrame(dataset, columns=['hrv_val'])
+        
+            scaler.fit(hrv_dataframe)
+            input_data_scaled = scaler.transform(input_data)
+            
+            model_name = 'svm'
+            
+            model = load_model(model_name)
+            prediction = model.predict(input_data_scaled)
+            
+            stress_mapping = {0: "Chronic Stress", 1: "Low Stress", 2: "Mild Stress"}
+            prediction_result = stress_mapping.get(int(prediction[0]), "Unknown")
+            label = 0 if prediction_result == "Chronic Stress" else 1 if prediction_result == "Low Stress" else 2
+            
+            hrvData_array.append({
+                "hrv": hrv,
+                "prediction": prediction_result,
+                "label": label,
+                "dateFrom": dateFrom,
+                "dateTo": dateTo
+            })
+            results.append({
+                "email": email,
+                "stress_data": hrvData_array
+            })
+    return results
 
 def register_user(data=None):
-    if data is None:
-        data = dict(request.json)
-    
-    print("User Data from input: ", data)
-    
-    if data['gender'] == 1:
-        data.update({"gender": "male"})
-    elif data['gender'] == 0:
-        data.update({"gender": "female"})
-    
-    _id = str(uuid1().hex)
-    data.update({"_id": _id})
-    
-    result = db['user-data'].insert_one(data)
-    if not result.inserted_id:
-        return {"message": "Failed to insert user data"}
-
-    return {"message": "User data inserted successfully"}
+    if isinstance(data, list):
+        for item in data:
+            item["_id"] = str(uuid1().hex)
+        result = db['prediction_results'].find_one_and_update({'email': item['email']}, {'$push': {'stress_data': {'$each': item['stress_data']}}}, upsert=True)
+    elif isinstance(data, dict):
+        data["_id"] = str(uuid1().hex)
+        result = db['prediction_results'].insert_one(data)
+    else:
+        raise ValueError("Invalid data format. Expected a dictionary or list of dictionaries.")
