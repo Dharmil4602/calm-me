@@ -4,6 +4,7 @@ from sklearn import svm
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import load_model
 import joblib
 import os
 
@@ -43,21 +44,31 @@ def lstm_model(X_train, Y_train):
     filename = 'lstm_model.h5'
     model.save(filename)
 
-def load_model(model_name):
+def load_model2(model_name):
     current_dir = os.path.dirname(__file__)
     if model_name == 'svm':
         model_path = os.path.join(current_dir, 'svm_model_new.joblib')
         model = joblib.load(model_path)
         return model
     elif model_name == 'logistic_regression':
-        model_path = os.path.join(current_dir, 'logistic_model.joblib')
+        model_path = os.path.join(current_dir, 'logistic_model_new.joblib')
         model = joblib.load(model_path)
         return model
     elif model_name == 'random_forest':
-        model_path = os.path.join(current_dir, 'rf_model.joblib')
+        model_path = os.path.join(current_dir, 'rf_model_new.joblib')
         model = joblib.load(model_path)
         return model
+    elif model_name == 'sequential':
+        model_path = os.path.join(current_dir, 'stress_prediction_model.h5')
+        model = load_model(model_path)
+        return model
+    elif model_name == 'feed':
+        model_path = os.path.join(current_dir, 'feedforward_stress_model.h5')
+        model = load_model(model_path)
+        return model
     elif model_name == 'lstm':
-        return joblib.load('lstm_model.h5')
+        model_path = os.path.join(current_dir, 'lstm_stress_model.h5')
+        model = load_model(model_path)
+        return model
     else:
         return None
